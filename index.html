@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Catat aktivitas harianmu dengan waktu otomatis, kategori, dan rekap bulanan" />
+  <meta name="theme-color" content="#7C3AED" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Aktivitas" />
+
+  <title>Catatan Aktivitas Harian</title>
+
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./style.css" />
+
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- jsPDF CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ╔═══════════════════════════════════╗ -->
+<!--   HEADER — REAL-TIME CLOCK           -->
+<!-- ╚═══════════════════════════════════╝ -->
+<header class="app-header">
+  <div class="header-inner">
+    <div class="app-title">⚡ Catatan Aktivitas</div>
+    <div class="clock-block">
+      <div id="clock" class="clock-time">00:00:00</div>
+      <div class="clock-date">
+        <div id="clock-day" class="clock-day">—</div>
+        <div id="clock-date" class="clock-full-date">— — —</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ╔═══════════════════════════════════╗ -->
+<!--   MAIN CONTENT                       -->
+<!-- ╚═══════════════════════════════════╝ -->
+<main class="app-wrapper">
+
+  <!-- ═══ PAGE: CATAT (home) ═══ -->
+  <section id="page-home" class="page active">
+
+    <!-- Form Catat Aktivitas -->
+    <p class="section-title">Catat Aktivitas Baru</p>
+    <div class="card form-card">
+      <form id="add-form" autocomplete="off">
+
+        <!-- Time display + toggle -->
+        <div class="time-toggle-row">
+          <div class="time-badge" id="time-badge">--:--</div>
+          <button type="button" class="btn-toggle-time" id="btn-toggle-time">✏️ Edit Waktu</button>
+        </div>
+
+        <!-- Manual time inputs (hidden by default) -->
+        <div class="manual-time-inputs form-group" id="manual-time-inputs">
+          <input
+            type="date"
+            id="manual-date"
+            class="form-input"
+            aria-label="Tanggal manual"
+          />
+          <input
+            type="time"
+            id="manual-time-h"
+            class="form-input"
+            aria-label="Jam manual"
+          />
+        </div>
+
+        <!-- Deskripsi -->
+        <div class="form-group">
+          <label class="form-label" for="activity-desc">Apa yang kamu lakukan?</label>
+          <textarea
+            id="activity-desc"
+            class="form-textarea"
+            placeholder="Contoh: Olahraga lari 30 menit di taman..."
+            rows="3"
+            required
+          ></textarea>
+        </div>
+
+        <!-- Kategori -->
+        <div class="form-group">
+          <label class="form-label" for="activity-cat">Kategori</label>
+          <div class="select-wrapper">
+            <select id="activity-cat" class="form-select">
+              <option value="">— Tanpa Kategori —</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="submit" id="submit-btn" class="btn btn-primary">
+          + Catat Aktivitas
+        </button>
+      </form>
+    </div>
+
+    <!-- Daftar Hari Ini -->
+    <p class="section-title" style="margin-top:28px">Aktivitas Hari Ini</p>
+    <div id="today-list" class="activity-list">
+      <div class="empty-state">
+        <span class="empty-icon">⏳</span>
+        <div class="empty-text">Memuat aktivitas...</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ═══ PAGE: REKAP BULANAN ═══ -->
+  <section id="page-recap" class="page">
+
+    <div class="recap-header">
+      <div class="month-nav">
+        <button id="btn-prev-month" class="btn-nav" title="Bulan sebelumnya">‹</button>
+        <div id="month-label" class="month-label">— —</div>
+        <button id="btn-next-month" class="btn-nav" title="Bulan berikutnya">›</button>
+      </div>
+      <button id="btn-export-pdf" class="btn btn-pdf">
+        📄 Unduh PDF
+      </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-strip">
+      <div class="stat-card">
+        <div id="stat-total" class="stat-value">0</div>
+        <div class="stat-label">Total Aktivitas</div>
+      </div>
+      <div class="stat-card">
+        <div id="stat-days" class="stat-value">0</div>
+        <div class="stat-label">Hari Aktif</div>
+      </div>
+      <div class="stat-card">
+        <div id="stat-top-cat" class="stat-value" style="font-size:16px;padding-top:4px">—</div>
+        <div class="stat-label">Kategori Terbanyak</div>
+      </div>
+    </div>
+
+    <!-- Recap list -->
+    <div id="recap-list"></div>
+
+  </section>
+
+  <!-- ═══ PAGE: KATEGORI ═══ -->
+  <section id="page-categories" class="page">
+
+    <p class="section-title">Kategori Saya</p>
+    <div id="cat-grid" class="cat-grid"></div>
+
+    <p class="section-title" style="margin-top:8px">Tambah Kategori Baru</p>
+    <div class="add-cat-form">
+      <div class="form-group">
+        <label class="form-label">Nama Kategori</label>
+        <input
+          type="text"
+          id="new-cat-name"
+          class="form-input"
+          placeholder="Contoh: Tidur Siang"
+          maxlength="30"
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Pilih Ikon</label>
+        <div id="emoji-picker" class="emoji-picker-row"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Pilih Warna</label>
+        <div id="color-picker" class="color-picker-row"></div>
+      </div>
+
+      <button id="btn-add-cat" class="btn btn-primary" style="margin-top:4px">
+        + Tambah Kategori
+      </button>
+    </div>
+
+  </section>
+
+</main>
+
+<!-- ╔═══════════════════════════════════╗ -->
+<!--   BOTTOM NAVIGATION                  -->
+<!-- ╚═══════════════════════════════════╝ -->
+<nav class="bottom-nav" role="navigation" aria-label="Navigasi utama">
+  <button class="nav-item active" data-tab="home" id="nav-home" aria-label="Catat Aktivitas">
+    <span class="nav-icon">✏️</span>
+    <span>Catat</span>
+  </button>
+  <button class="nav-item" data-tab="recap" id="nav-recap" aria-label="Rekap Bulanan">
+    <span class="nav-icon">📊</span>
+    <span>Rekap</span>
+  </button>
+  <button class="nav-item" data-tab="categories" id="nav-categories" aria-label="Kelola Kategori">
+    <span class="nav-icon">🏷️</span>
+    <span>Kategori</span>
+  </button>
+</nav>
+
+<!-- ╔═══════════════════════════════════╗ -->
+<!--   MODAL: EDIT AKTIVITAS              -->
+<!-- ╚═══════════════════════════════════╝ -->
+<div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <h2 id="modal-title" class="modal-title">✏️ Edit Aktivitas</h2>
+    <form id="edit-form" autocomplete="off">
+
+      <div class="form-group">
+        <label class="form-label" for="edit-desc">Deskripsi</label>
+        <textarea id="edit-desc" class="form-textarea" rows="3" required></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="edit-cat">Kategori</label>
+        <div class="select-wrapper">
+          <select id="edit-cat" class="form-select"></select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Waktu Aktivitas</label>
+        <div class="manual-time-inputs visible" style="margin-top:0">
+          <input type="date" id="edit-date" class="form-input" required />
+          <input type="time" id="edit-time" class="form-input" required />
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="btn-modal-close" class="btn btn-secondary">Batal</button>
+        <button type="submit" id="btn-save-edit" class="btn btn-primary">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ╔═══════════════════════════════════╗ -->
+<!--   TOAST CONTAINER                    -->
+<!-- ╚═══════════════════════════════════╝ -->
+<div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+<!-- Scripts -->
+<script src="./supabase.js"></script>
+<script src="./app.js"></script>
+
+</body>
+</html>
