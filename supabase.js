@@ -116,3 +116,192 @@ async function deleteActivity(id) {
     .eq('id', id);
   if (error) throw error;
 }
+
+// ============================================================
+//  HELPER: DATABASE HEALTH & KEEP-ALIVE PING
+// ============================================================
+
+async function pingDatabase() {
+  const startTime = performance.now();
+  try {
+    const { data, error } = await db
+      .from('categories')
+      .select('id')
+      .limit(1);
+    const latency = Math.round(performance.now() - startTime);
+    if (error) throw error;
+    return { success: true, latency, timestamp: new Date() };
+  } catch (err) {
+    const latency = Math.round(performance.now() - startTime);
+    return { success: false, latency, error: err.message, timestamp: new Date() };
+  }
+}
+
+// ============================================================
+//  HELPER: BOOKS (DENGAN LOCALSTORAGE FALLBACK)
+// ============================================================
+
+const LOCAL_STORAGE_BOOKS_KEY = 'aktivitas_reading_books_v1';
+
+function getLocalBooks() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_BOOKS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.warn('Gagal membaca buku dari localStorage:', e);
+    return [];
+  }
+}
+
+function saveLocalBooks(books) {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_BOOKS_KEY, JSON.stringify(books));
+  } catch (e) {
+    console.warn('Gagal menyimpan buku ke localStorage:', e);
+  }
+}
+
+async function getBooks() {
+  try {
+    const { data, error } = await db
+      .from('books')
+      .select('*')
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+    // Simpan salinan ke localStorage sebagai backup offline
+    saveLocalBooks(data || []);
+    return data || [];
+  } catch (err) {
+    // Fallback jika tabel books belum dibuat di Supabase atau offline
+    console.info('Menggunakan penyimpanan lokal untuk buku (Tabel Supabase belum dibuat atau offline):', err.message);
+    return getLocalBooks();
+  }
+}
+
+async function addBook(bookData) {
+  const newBook = {
+    title: bookData.title,
+    author: bookData.author || '',
+    total_pages: parseInt(bookData.total_pages, 10) || 0,
+    current_page: parseInt(bookData.current_page, 10) || 0,
+    status: bookData.status || 'reading',
+    notes: bookData.notes || '',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  try {
+    const { data, error } = await db
+      .from('books')
+      .insert([newBook])
+      .select()
+      .single();
+    if (error) throw error;
+
+    // Sinkronkan ke local
+    const local = getLocalBooks();
+    local.unshift(data);
+    saveLocalBooks(local);
+    return data;
+  } catch (err) {
+    // Simpan lokal
+    newBook.id = 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const local = getLocalBooks();
+    local.unshift(newBook);
+    saveLocalBooks(local);
+    return newBook;
+  }
+}
+
+async function updateBook(id, bookData) {
+  const updatePayload = {
+    title: bookData.title,
+    author: bookData.author || '',
+    total_pages: parseInt(bookData.total_pages, 10) || 0,
+    current_page: parseInt(bookData.current_page, 10) || 0,
+    status: bookData.status || 'reading',
+    notes: bookData.notes || '',
+    updated_at: new Date().toISOString()
+  };
+
+  try {
+    if (!String(id).startsWith('local_')) {
+      const { data, error } = await db
+        .from('books')
+        .update(updatePayload)
+        .eq('id', id)
+        .select()
+        .single();
+      if (!error && data) {
+        const local = getLocalBooks();
+        const idx = local.findIndex(b => b.id === id);
+        if (idx !== -1) local[idx] = data;
+        saveLocalBooks(local);
+        return data;
+      }
+    }
+    throw new Error('Fallback ke lokal');
+  } catch (err) {
+    const local = getLocalBooks();
+    const idx = local.findIndex(b => b.id === id);
+    if (idx !== -1) {
+      local[idx] = { ...local[idx], ...updatePayload };
+      saveLocalBooks(local);
+      return local[idx];
+    }
+    throw err;
+  }
+}
+
+async function updateBookProgress(id, currentPage, newStatus = null) {
+  const current = parseInt(currentPage, 10) || 0;
+  const updatePayload = {
+    current_page: current,
+    updated_at: new Date().toISOString()
+  };
+  if (newStatus) updatePayload.status = newStatus;
+
+  try {
+    if (!String(id).startsWith('local_')) {
+      const { data, error } = await db
+        .from('books')
+        .update(updatePayload)
+        .eq('id', id)
+        .select()
+        .single();
+      if (!error && data) {
+        const local = getLocalBooks();
+        const idx = local.findIndex(b => b.id === id);
+        if (idx !== -1) local[idx] = data;
+        saveLocalBooks(local);
+        return data;
+      }
+    }
+    throw new Error('Fallback ke lokal');
+  } catch (err) {
+    const local = getLocalBooks();
+    const idx = local.findIndex(b => b.id === id);
+    if (idx !== -1) {
+      local[idx] = { ...local[idx], ...updatePayload };
+      saveLocalBooks(local);
+      return local[idx];
+    }
+    throw err;
+  }
+}
+
+async function deleteBook(id) {
+  try {
+    if (!String(id).startsWith('local_')) {
+      const { error } = await db
+        .from('books')
+        .delete()
+        .eq('id', id);
+      if (error) console.warn('Supabase delete error:', error);
+    }
+  } catch (err) {
+    console.warn('Gagal hapus dari Supabase:', err.message);
+  }
+  const local = getLocalBooks().filter(b => b.id !== id);
+  saveLocalBooks(local);
+}

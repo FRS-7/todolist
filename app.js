@@ -92,9 +92,12 @@ const navItems = document.querySelectorAll('.nav-item');
 function switchTab(tabId) {
   pages.forEach(p => p.classList.remove('active'));
   navItems.forEach(n => n.classList.remove('active'));
-  document.getElementById(`page-${tabId}`).classList.add('active');
-  document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+  const targetPage = document.getElementById(`page-${tabId}`);
+  const targetNav  = document.querySelector(`[data-tab="${tabId}"]`);
+  if (targetPage) targetPage.classList.add('active');
+  if (targetNav) targetNav.classList.add('active');
 
+  if (tabId === 'reading') loadReadingPage();
   if (tabId === 'recap') loadRecap();
   if (tabId === 'categories') renderCatGrid();
 }
@@ -802,6 +805,901 @@ function escHtml(str) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// ════════════════════════════════════════════════════════════
+//  AUDIO CHIME SYNTHESIZER (WEB AUDIO API)
+// ════════════════════════════════════════════════════════════
+function playAudioChime(type = 'bell') {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    if (ctx.state === 'suspended') ctx.resume();
+
+    const now = ctx.currentTime;
+    if (type === 'bell') {
+      [659.25, 830.61, 987.77].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+        gain.gain.setValueAtTime(0.12, now + idx * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.12 + 0.85);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.12);
+        osc.stop(now + idx * 0.12 + 0.9);
+      });
+    } else if (type === 'complete') {
+      [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.14);
+        gain.gain.setValueAtTime(0.15, now + idx * 0.14);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.14 + 0.7);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.14);
+        osc.stop(now + idx * 0.14 + 0.75);
+      });
+    }
+  } catch (err) {
+    console.warn('Web Audio chime error:', err);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  READING MOTIVATION & STREAK
+// ════════════════════════════════════════════════════════════
+const READING_QUOTES = [
+  { quote: "Aku rela dipenjara asalkan bersama buku, karena dengan buku aku bebas.", author: "Mohammad Hatta" },
+  { quote: "Cuma perlu satu buku untuk jatuh cinta pada membaca. Cari buku itu. Mari jatuh cinta.", author: "Najwa Shihab" },
+  { quote: "Makin banyak membaca, makin banyak tahu. Makin banyak tempat yang kau tuju.", author: "Dr. Seuss" },
+  { quote: "Tahu kau mengapa aku sayangi kau? Karena kau membaca dan kau menulis.", author: "Pramoedya Ananta Toer" },
+  { quote: "Membaca adalah bagi pikiran apa artinya olahraga bagi tubuh.", author: "Joseph Addison" },
+  { quote: "Buku adalah sahabat paling tenang dan setia, penasihat paling bijak dan guru paling sabar.", author: "Charles W. Eliot" },
+  { quote: "Satu jam yang dihabiskan untuk membaca adalah satu jam yang dicuri dari surga.", author: "Thomas Wharton" }
+];
+
+function displayRandomReadingQuote() {
+  const quoteEl = document.getElementById('reading-quote-text');
+  const authorEl = document.getElementById('reading-quote-author');
+  if (!quoteEl || !authorEl) return;
+  const item = READING_QUOTES[Math.floor(Math.random() * READING_QUOTES.length)];
+  quoteEl.textContent = `"${item.quote}"`;
+  authorEl.textContent = `— ${item.author}`;
+}
+
+function updateReadingStreak() {
+  const streakCountEl = document.getElementById('reading-streak-count');
+  const todayStatusEl = document.getElementById('today-read-status');
+  const todayTextEl = document.getElementById('today-read-text');
+  if (!streakCountEl) return;
+
+  const hasReadToday = todayActivities.some(act => {
+    const catName = act.categories?.name?.toLowerCase() || '';
+    const desc = act.description?.toLowerCase() || '';
+    return catName.includes('baca') || catName.includes('buku') || desc.includes('membaca') || desc.includes('baca buku');
+  });
+
+  if (hasReadToday) {
+    todayStatusEl.classList.add('done');
+    todayTextEl.textContent = '✅ Sudah membaca hari ini!';
+  } else {
+    todayStatusEl.classList.remove('done');
+    todayTextEl.textContent = 'Belum membaca hari ini';
+  }
+
+  let streak = hasReadToday ? 1 : 0;
+  if (recapActivities && recapActivities.length > 0) {
+    const readDays = new Set();
+    recapActivities.forEach(a => {
+      const catName = a.categories?.name?.toLowerCase() || '';
+      const desc = a.description?.toLowerCase() || '';
+      if (catName.includes('baca') || catName.includes('buku') || desc.includes('membaca')) {
+        readDays.add(new Date(a.logged_at).toDateString());
+      }
+    });
+
+    let checkDate = new Date();
+    if (!hasReadToday) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    let count = 0;
+    while (readDays.has(checkDate.toDateString())) {
+      count++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    streak = count;
+  }
+
+  streakCountEl.textContent = `${streak} Hari`;
+}
+
+// ════════════════════════════════════════════════════════════
+//  READING REMINDER MODULE
+// ════════════════════════════════════════════════════════════
+const REMINDER_KEY_ENABLED = 'aktivitas_reading_reminder_enabled';
+const REMINDER_KEY_TIME = 'aktivitas_reading_reminder_time';
+const REMINDER_KEY_LAST_NOTIFIED = 'aktivitas_reading_reminder_last';
+
+let reminderEnabled = localStorage.getItem(REMINDER_KEY_ENABLED) === 'true';
+let reminderTime = localStorage.getItem(REMINDER_KEY_TIME) || '20:00';
+
+function initReminderModule() {
+  const toggleEl = document.getElementById('reminder-toggle');
+  const timeInputEl = document.getElementById('reminder-time');
+  const saveBtn = document.getElementById('btn-save-reminder');
+  const testBtn = document.getElementById('btn-test-notification');
+
+  if (toggleEl) toggleEl.checked = reminderEnabled;
+  if (timeInputEl) timeInputEl.value = reminderTime;
+
+  updateReminderStatusText();
+
+  toggleEl && toggleEl.addEventListener('change', async () => {
+    reminderEnabled = toggleEl.checked;
+    localStorage.setItem(REMINDER_KEY_ENABLED, reminderEnabled);
+
+    if (reminderEnabled) {
+      if ('Notification' in window && Notification.permission !== 'granted') {
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') {
+          showToast('🔔 Izin notifikasi diaktifkan!', 'success');
+        } else {
+          showToast('⚠️ Izin notifikasi ditolak oleh browser.', 'error');
+        }
+      }
+    }
+    updateReminderStatusText();
+    showToast(reminderEnabled ? '✅ Pengingat membaca aktif' : 'Pengingat membaca dinonaktifkan');
+  });
+
+  saveBtn && saveBtn.addEventListener('click', () => {
+    reminderTime = timeInputEl.value || '20:00';
+    localStorage.setItem(REMINDER_KEY_TIME, reminderTime);
+    showToast(`💾 Jam pengingat disimpan: pukul ${reminderTime}`, 'success');
+    updateReminderStatusText();
+  });
+
+  testBtn && testBtn.addEventListener('click', async () => {
+    await testReadingNotification();
+  });
+
+  if (window.reminderInterval) clearInterval(window.reminderInterval);
+  window.reminderInterval = setInterval(checkReadingReminderSchedule, 30000);
+}
+
+function updateReminderStatusText() {
+  const statusText = document.getElementById('reminder-status-text');
+  if (!statusText) return;
+
+  if (!('Notification' in window)) {
+    statusText.textContent = 'Browser ini tidak mendukung Web Notifications, tetapi nada & toast pengingat tetap aktif.';
+    return;
+  }
+
+  if (Notification.permission === 'denied') {
+    statusText.textContent = '⚠️ Izin notifikasi browser diblokir. Aktifkan izin di setelan browser untuk menerima pemberitahuan.';
+    return;
+  }
+
+  if (!reminderEnabled) {
+    statusText.textContent = 'Pengingat membaca saat ini MATI. Geser tombol switch di atas untuk mengaktifkan pengingat harian.';
+  } else {
+    statusText.textContent = `🔔 Pengingat AKTIF setiap hari pukul ${reminderTime}. Notifikasi dan nada akan berbunyi saat waktunya tiba.`;
+  }
+}
+
+async function testReadingNotification() {
+  if ('Notification' in window && Notification.permission !== 'granted') {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      showToast('⚠️ Izin notifikasi belum diizinkan oleh browser.', 'error');
+      updateReminderStatusText();
+      return;
+    }
+  }
+
+  playAudioChime('bell');
+  showToast('🔔 Tes Notifikasi: Saatnya membaca buku!', 'success');
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        const reg = await navigator.serviceWorker.ready;
+        reg.showNotification('Waktunya Membaca Buku! 📚', {
+          body: 'Ini adalah contoh pengingat membaca harian. Luangkan waktu sejenak untuk membaca buku favoritmu hari ini!',
+          icon: './icons/icon-192.png',
+          badge: './icons/icon-192.png'
+        });
+      } else {
+        new Notification('Waktunya Membaca Buku! 📚', {
+          body: 'Ini adalah contoh pengingat membaca harian. Luangkan waktu sejenak untuk membaca buku favoritmu hari ini!',
+          icon: './icons/icon-192.png'
+        });
+      }
+    } catch (e) {
+      console.warn('Notification error:', e);
+    }
+  }
+}
+
+function checkReadingReminderSchedule() {
+  if (!reminderEnabled) return;
+
+  const now = new Date();
+  const currentHH = String(now.getHours()).padStart(2, '0');
+  const currentMM = String(now.getMinutes()).padStart(2, '0');
+  const currentTime = `${currentHH}:${currentMM}`;
+  const todayStr = toLocalDateString(now);
+
+  const lastNotified = localStorage.getItem(REMINDER_KEY_LAST_NOTIFIED);
+
+  if (currentTime === reminderTime && lastNotified !== todayStr) {
+    const hasReadToday = todayActivities.some(act => {
+      const catName = act.categories?.name?.toLowerCase() || '';
+      const desc = act.description?.toLowerCase() || '';
+      return catName.includes('baca') || catName.includes('buku') || desc.includes('membaca');
+    });
+
+    if (!hasReadToday) {
+      localStorage.setItem(REMINDER_KEY_LAST_NOTIFIED, todayStr);
+      playAudioChime('bell');
+      showToast('📚 Pengingat: Saatnya luangkan waktu membaca buku hari ini!', 'success');
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.ready.then(reg => {
+              reg.showNotification('Waktunya Membaca Buku! 📚', {
+                body: 'Sudahkah kamu membaca buku hari ini? Buka aplikasi dan mulai sesi fokus membaca!',
+                icon: './icons/icon-192.png',
+                badge: './icons/icon-192.png'
+              });
+            });
+          } else {
+            new Notification('Waktunya Membaca Buku! 📚', {
+              body: 'Sudahkah kamu membaca buku hari ini? Buka aplikasi dan mulai sesi fokus membaca!',
+              icon: './icons/icon-192.png'
+            });
+          }
+        } catch (e) {
+          console.warn('Notification trigger error:', e);
+        }
+      }
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  FOCUS READING TIMER
+// ════════════════════════════════════════════════════════════
+let timerRunning = false;
+let timerPaused = false;
+let timerMode = 'preset';
+let timerTotalSeconds = 15 * 60;
+let timerRemainingSeconds = 15 * 60;
+let timerElapsedSeconds = 0;
+let timerInterval = null;
+
+function initReadingTimer() {
+  const digitsEl = document.getElementById('timer-digits');
+  const labelEl = document.getElementById('timer-status-label');
+  const startBtn = document.getElementById('btn-timer-start');
+  const pauseBtn = document.getElementById('btn-timer-pause');
+  const finishBtn = document.getElementById('btn-timer-finish');
+  const resetBtn = document.getElementById('btn-timer-reset');
+  const presetBtns = document.querySelectorAll('.btn-preset');
+  const bookSelect = document.getElementById('timer-book-select');
+  const startPageInput = document.getElementById('timer-start-page');
+  const endPageInput = document.getElementById('timer-end-page');
+
+  presetBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (timerRunning) {
+        if (!confirm('Sesi timer sedang berjalan. Ganti durasi dan reset timer?')) return;
+        resetTimer();
+      }
+      presetBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const minutes = parseInt(btn.dataset.minutes, 10);
+      if (minutes === 0) {
+        timerMode = 'stopwatch';
+        timerTotalSeconds = 0;
+        timerRemainingSeconds = 0;
+        timerElapsedSeconds = 0;
+        digitsEl.textContent = '00:00';
+        labelEl.textContent = 'Mode Stopwatch Bebas';
+      } else {
+        timerMode = 'preset';
+        timerTotalSeconds = minutes * 60;
+        timerRemainingSeconds = timerTotalSeconds;
+        timerElapsedSeconds = 0;
+        digitsEl.textContent = formatTimerDigits(timerRemainingSeconds);
+        labelEl.textContent = 'Siap Membaca';
+      }
+    });
+  });
+
+  bookSelect && bookSelect.addEventListener('change', () => {
+    const selectedId = bookSelect.value;
+    if (selectedId) {
+      const book = books.find(b => b.id === selectedId);
+      if (book) {
+        startPageInput.value = book.current_page || 0;
+        if (book.total_pages && book.total_pages > book.current_page) {
+          endPageInput.placeholder = `Maks ${book.total_pages}`;
+        }
+      }
+    }
+  });
+
+  startBtn && startBtn.addEventListener('click', () => {
+    if (!timerRunning) startTimer();
+  });
+
+  pauseBtn && pauseBtn.addEventListener('click', () => {
+    if (timerRunning) {
+      if (timerPaused) resumeTimer();
+      else pauseTimer();
+    }
+  });
+
+  finishBtn && finishBtn.addEventListener('click', () => {
+    finishReadingSession();
+  });
+
+  resetBtn && resetBtn.addEventListener('click', () => {
+    resetTimer();
+  });
+}
+
+function formatTimerDigits(totalSecs) {
+  const m = Math.floor(totalSecs / 60);
+  const s = totalSecs % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerRunning = true;
+  timerPaused = false;
+
+  const startBtn = document.getElementById('btn-timer-start');
+  const pauseBtn = document.getElementById('btn-timer-pause');
+  const finishBtn = document.getElementById('btn-timer-finish');
+  const resetBtn = document.getElementById('btn-timer-reset');
+  const labelEl = document.getElementById('timer-status-label');
+
+  startBtn.style.display = 'none';
+  pauseBtn.style.display = 'inline-flex';
+  pauseBtn.textContent = '⏸ Jeda';
+  finishBtn.style.display = 'inline-flex';
+  resetBtn.style.display = 'inline-flex';
+  labelEl.textContent = '📖 Sedang Membaca...';
+
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(timerTick, 1000);
+}
+
+function pauseTimer() {
+  timerPaused = true;
+  clearInterval(timerInterval);
+  const pauseBtn = document.getElementById('btn-timer-pause');
+  const labelEl = document.getElementById('timer-status-label');
+  pauseBtn.textContent = '▶ Lanjutkan';
+  labelEl.textContent = '⏸ Sesi Dijeda';
+}
+
+function resumeTimer() {
+  timerPaused = false;
+  const pauseBtn = document.getElementById('btn-timer-pause');
+  const labelEl = document.getElementById('timer-status-label');
+  pauseBtn.textContent = '⏸ Jeda';
+  labelEl.textContent = '📖 Sedang Membaca...';
+  timerInterval = setInterval(timerTick, 1000);
+}
+
+function resetTimer() {
+  clearInterval(timerInterval);
+  timerRunning = false;
+  timerPaused = false;
+  timerElapsedSeconds = 0;
+
+  const startBtn = document.getElementById('btn-timer-start');
+  const pauseBtn = document.getElementById('btn-timer-pause');
+  const finishBtn = document.getElementById('btn-timer-finish');
+  const resetBtn = document.getElementById('btn-timer-reset');
+  const digitsEl = document.getElementById('timer-digits');
+  const labelEl = document.getElementById('timer-status-label');
+
+  startBtn.style.display = 'inline-flex';
+  pauseBtn.style.display = 'none';
+  finishBtn.style.display = 'none';
+  resetBtn.style.display = 'none';
+
+  if (timerMode === 'stopwatch') {
+    digitsEl.textContent = '00:00';
+    labelEl.textContent = 'Mode Stopwatch Bebas';
+  } else {
+    timerRemainingSeconds = timerTotalSeconds;
+    digitsEl.textContent = formatTimerDigits(timerRemainingSeconds);
+    labelEl.textContent = 'Siap Membaca';
+  }
+}
+
+function timerTick() {
+  const digitsEl = document.getElementById('timer-digits');
+  const labelEl = document.getElementById('timer-status-label');
+
+  if (timerMode === 'stopwatch') {
+    timerElapsedSeconds++;
+    digitsEl.textContent = formatTimerDigits(timerElapsedSeconds);
+  } else {
+    timerElapsedSeconds++;
+    timerRemainingSeconds--;
+    if (timerRemainingSeconds <= 0) {
+      clearInterval(timerInterval);
+      digitsEl.textContent = '00:00';
+      labelEl.textContent = '🎉 Waktu Membaca Selesai!';
+      playAudioChime('complete');
+      showToast('🎉 Sesi membaca selesai! Klik "Selesai & Catat" untuk menyimpan.', 'success');
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Sesi Membaca Selesai! 🎉', {
+          body: `Hebat! Kamu telah menyelesaikan sesi membaca selama ${Math.round(timerTotalSeconds / 60)} menit. Simpan progresmu sekarang!`,
+          icon: './icons/icon-192.png'
+        });
+      }
+      return;
+    }
+    digitsEl.textContent = formatTimerDigits(timerRemainingSeconds);
+  }
+}
+
+async function finishReadingSession() {
+  const finishBtn = document.getElementById('btn-timer-finish');
+  const bookSelect = document.getElementById('timer-book-select');
+  const startPageInput = document.getElementById('timer-start-page');
+  const endPageInput = document.getElementById('timer-end-page');
+
+  const elapsedMinutes = Math.max(1, Math.round(timerElapsedSeconds / 60));
+  const selectedBookId = bookSelect.value;
+  const selectedBook = books.find(b => b.id === selectedBookId);
+
+  const startPage = parseInt(startPageInput.value, 10);
+  const endPage = parseInt(endPageInput.value, 10);
+
+  let desc = '';
+  if (selectedBook) {
+    desc = `Membaca "${selectedBook.title}"`;
+    if (!isNaN(startPage) && !isNaN(endPage) && endPage > 0) {
+      desc += ` hal ${startPage}-${endPage}`;
+    } else if (!isNaN(endPage) && endPage > 0) {
+      desc += ` hingga hal ${endPage}`;
+    }
+    desc += ` (${elapsedMinutes} menit)`;
+  } else {
+    desc = `Membaca buku (${elapsedMinutes} menit)`;
+  }
+
+  let bookCat = categories.find(c => {
+    const n = c.name.toLowerCase();
+    return n.includes('baca') || n.includes('buku');
+  });
+
+  finishBtn.disabled = true;
+  finishBtn.innerHTML = '<span class="spinner"></span> Menyimpan...';
+
+  try {
+    const newAct = await addActivity(desc, bookCat ? bookCat.id : null, new Date());
+    todayActivities.unshift(newAct);
+    renderTodayList();
+
+    if (selectedBook && !isNaN(endPage) && endPage > 0) {
+      const newCurrent = endPage;
+      const isFinished = selectedBook.total_pages > 0 && newCurrent >= selectedBook.total_pages;
+      await updateBookProgress(selectedBook.id, newCurrent, isFinished ? 'finished' : 'reading');
+      await loadBooks();
+    }
+
+    playAudioChime('complete');
+    showToast(`✅ Aktivitas membaca "${desc}" berhasil dicatat!`, 'success');
+    resetTimer();
+    updateReadingStreak();
+  } catch (err) {
+    showToast('Gagal menyimpan aktivitas: ' + err.message, 'error');
+  } finally {
+    finishBtn.disabled = false;
+    finishBtn.innerHTML = '⏹ Selesai & Catat';
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  BOOKSHELF & BOOK MANAGEMENT
+// ════════════════════════════════════════════════════════════
+let books = [];
+let activeBookFilter = 'all';
+let editingBookId = null;
+
+async function loadBooks() {
+  const gridEl = document.getElementById('bookshelf-grid');
+  try {
+    books = await getBooks();
+    renderBookshelf();
+    populateBookSelect();
+  } catch (err) {
+    console.error('Error loadBooks:', err);
+    if (gridEl) gridEl.innerHTML = `<div class="empty-state"><span class="empty-icon">⚠️</span><div class="empty-text">Gagal memuat buku</div></div>`;
+  }
+}
+
+function populateBookSelect() {
+  const sel = document.getElementById('timer-book-select');
+  if (!sel) return;
+  const currentVal = sel.value;
+  sel.innerHTML = '<option value="">— Membaca Bebas (Tanpa Buku Khusus) —</option>';
+  books.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.id;
+    opt.textContent = `📖 ${b.title}${b.author ? ' — ' + b.author : ''} (${b.current_page || 0}/${b.total_pages || '?'} hal)`;
+    sel.appendChild(opt);
+  });
+  if (currentVal) sel.value = currentVal;
+}
+
+function renderBookshelf() {
+  const gridEl = document.getElementById('bookshelf-grid');
+  if (!gridEl) return;
+
+  const cAll = books.length;
+  const cReading = books.filter(b => b.status === 'reading').length;
+  const cWishlist = books.filter(b => b.status === 'wishlist').length;
+  const cFinished = books.filter(b => b.status === 'finished').length;
+
+  document.getElementById('count-book-all').textContent = cAll;
+  document.getElementById('count-book-reading').textContent = cReading;
+  document.getElementById('count-book-wishlist').textContent = cWishlist;
+  document.getElementById('count-book-finished').textContent = cFinished;
+
+  const filtered = activeBookFilter === 'all'
+    ? books
+    : books.filter(b => b.status === activeBookFilter);
+
+  if (filtered.length === 0) {
+    gridEl.innerHTML = `
+      <div class="empty-state fade-in" style="grid-column: 1 / -1">
+        <span class="empty-icon">📚</span>
+        <div class="empty-text">Tidak ada buku dalam kategori ini</div>
+        <div class="empty-sub">Tambahkan buku barumu untuk mulai melacak progres membaca!</div>
+      </div>`;
+    return;
+  }
+
+  gridEl.innerHTML = '';
+  filtered.forEach(book => {
+    gridEl.appendChild(buildBookCard(book));
+  });
+}
+
+function buildBookCard(book) {
+  const current = book.current_page || 0;
+  const total = book.total_pages || 0;
+  const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+
+  const card = document.createElement('div');
+  card.className = `book-card fade-in ${book.status}`;
+  card.dataset.id = book.id;
+
+  let statusLabel = 'Sedang Dibaca';
+  if (book.status === 'wishlist') statusLabel = 'Ingin Dibaca';
+  if (book.status === 'finished') statusLabel = 'Selesai';
+
+  card.innerHTML = `
+    <div class="book-card-top">
+      <div class="book-cover-icon">📖</div>
+      <div class="book-info">
+        <div class="book-title" title="${escHtml(book.title)}">${escHtml(book.title)}</div>
+        <div class="book-author">${book.author ? escHtml(book.author) : 'Penulis tidak diketahui'}</div>
+      </div>
+      <span class="book-status-tag ${book.status}">${statusLabel}</span>
+    </div>
+
+    <div class="book-progress-wrap">
+      <div class="book-progress-info">
+        <span>Progres: ${current} / ${total > 0 ? total : '?'} hal</span>
+        <span>${total > 0 ? pct + '%' : ''}</span>
+      </div>
+      <div class="book-progress-bar">
+        <div class="book-progress-fill" style="width: ${total > 0 ? pct : 0}%"></div>
+      </div>
+    </div>
+
+    ${book.notes ? `<div class="book-notes-box">"${escHtml(book.notes)}"</div>` : ''}
+
+    <div class="book-actions-row">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="startTimerWithBook('${book.id}')" title="Mulai sesi membaca buku ini">
+        ▶ Baca
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="openQuickProgressModal('${book.id}')" title="Update halaman terakhir">
+        ✏️ Progres
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="openEditBookModal('${book.id}')" title="Edit info buku">
+        ⚙️ Edit
+      </button>
+      <button type="button" class="btn-icon delete" style="padding:6px 8px" onclick="confirmDeleteBook('${book.id}')" title="Hapus buku">
+        🗑️
+      </button>
+    </div>
+  `;
+  return card;
+}
+
+function startTimerWithBook(bookId) {
+  const sel = document.getElementById('timer-book-select');
+  const startPage = document.getElementById('timer-start-page');
+  const endPage = document.getElementById('timer-end-page');
+  if (sel) {
+    sel.value = bookId;
+    const b = books.find(item => item.id === bookId);
+    if (b) {
+      startPage.value = b.current_page || 0;
+      endPage.value = '';
+    }
+  }
+  document.getElementById('timer-digits')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showToast('📖 Buku dipilih di timer membaca!', 'success');
+}
+
+function openAddBookModal() {
+  editingBookId = null;
+  document.getElementById('modal-book-title').textContent = '📚 Tambah Buku Baru';
+  document.getElementById('book-id').value = '';
+  document.getElementById('book-title').value = '';
+  document.getElementById('book-author').value = '';
+  document.getElementById('book-current-page').value = '0';
+  document.getElementById('book-total-pages').value = '';
+  document.getElementById('book-status').value = 'reading';
+  document.getElementById('book-notes').value = '';
+  document.getElementById('modal-book').classList.add('visible');
+  document.getElementById('book-title').focus();
+}
+
+function openEditBookModal(bookId) {
+  const book = books.find(b => b.id === bookId);
+  if (!book) return;
+  editingBookId = bookId;
+  document.getElementById('modal-book-title').textContent = '✏️ Edit Buku';
+  document.getElementById('book-id').value = book.id;
+  document.getElementById('book-title').value = book.title;
+  document.getElementById('book-author').value = book.author || '';
+  document.getElementById('book-current-page').value = book.current_page || 0;
+  document.getElementById('book-total-pages').value = book.total_pages || '';
+  document.getElementById('book-status').value = book.status || 'reading';
+  document.getElementById('book-notes').value = book.notes || '';
+  document.getElementById('modal-book').classList.add('visible');
+}
+
+function closeBookModal() {
+  document.getElementById('modal-book').classList.remove('visible');
+  editingBookId = null;
+}
+
+function openQuickProgressModal(bookId) {
+  const book = books.find(b => b.id === bookId);
+  if (!book) return;
+  document.getElementById('quick-book-id').value = book.id;
+  document.getElementById('quick-book-title').textContent = `Buku: "${book.title}" (Total: ${book.total_pages || '?'} halaman)`;
+  document.getElementById('quick-current-page').value = book.current_page || 0;
+  document.getElementById('quick-page-hint').textContent = `Total Halaman: ${book.total_pages || 'tidak ditentukan'}`;
+  document.getElementById('modal-quick-progress').classList.add('visible');
+  document.getElementById('quick-current-page').focus();
+}
+
+function closeQuickProgressModal() {
+  document.getElementById('modal-quick-progress').classList.remove('visible');
+}
+
+async function confirmDeleteBook(bookId) {
+  const book = books.find(b => b.id === bookId);
+  if (!confirm(`Hapus buku "${book ? book.title : ''}" dari rak buku?`)) return;
+  try {
+    await deleteBook(bookId);
+    books = books.filter(b => b.id !== bookId);
+    renderBookshelf();
+    populateBookSelect();
+    showToast('🗑️ Buku berhasil dihapus', 'success');
+  } catch (err) {
+    showToast('Gagal menghapus buku: ' + err.message, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  DATABASE STATUS & ANTI-PAUSE MODAL
+// ════════════════════════════════════════════════════════════
+let lastPingResult = null;
+
+async function checkDbStatus() {
+  const pill = document.getElementById('btn-db-status');
+  const textEl = document.getElementById('db-status-text');
+  if (!pill) return;
+
+  pill.className = 'db-status-pill checking';
+  textEl.textContent = 'Cek DB...';
+
+  const res = await pingDatabase();
+  lastPingResult = res;
+
+  if (res.success) {
+    pill.className = 'db-status-pill online';
+    textEl.textContent = 'DB Online';
+  } else {
+    pill.className = 'db-status-pill offline';
+    textEl.textContent = 'DB Offline';
+  }
+  updateDbModalDetails();
+}
+
+function updateDbModalDetails() {
+  const dotEl = document.getElementById('db-modal-dot');
+  const stateEl = document.getElementById('db-modal-state');
+  const latencyEl = document.getElementById('db-modal-latency');
+  const logEl = document.getElementById('db-last-ping-time');
+
+  if (!stateEl) return;
+
+  if (!lastPingResult) {
+    stateEl.textContent = 'Belum diperiksa';
+    latencyEl.textContent = 'Latency: — ms';
+    return;
+  }
+
+  if (lastPingResult.success) {
+    dotEl?.classList.remove('offline');
+    stateEl.textContent = 'Database Terhubung & Aktif';
+    stateEl.style.color = 'var(--success)';
+    latencyEl.textContent = `Latency: ${lastPingResult.latency} ms • Status: OK (200)`;
+  } else {
+    dotEl?.classList.add('offline');
+    stateEl.textContent = 'Database Tidak Terjangkau / Ter-pause';
+    stateEl.style.color = 'var(--danger)';
+    latencyEl.textContent = `Error: ${lastPingResult.error || 'Connection Failed'}`;
+  }
+
+  const timeStr = lastPingResult.timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const dateStr = lastPingResult.timestamp.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  logEl.textContent = `${dateStr} pukul ${timeStr} (${lastPingResult.latency} ms)`;
+}
+
+function openDbStatusModal() {
+  document.getElementById('modal-db-status')?.classList.add('visible');
+  updateDbModalDetails();
+}
+
+function closeDbStatusModal() {
+  document.getElementById('modal-db-status')?.classList.remove('visible');
+}
+
+// ════════════════════════════════════════════════════════════
+//  INITIALIZE READING FEATURE & EVENT LISTENERS
+// ════════════════════════════════════════════════════════════
+async function loadReadingPage() {
+  displayRandomReadingQuote();
+  updateReadingStreak();
+  await loadBooks();
+}
+
+function initReadingFeature() {
+  initReminderModule();
+  initReadingTimer();
+  displayRandomReadingQuote();
+
+  // Tombol tambah buku
+  document.getElementById('btn-open-add-book')?.addEventListener('click', openAddBookModal);
+  document.getElementById('btn-modal-book-close')?.addEventListener('click', closeBookModal);
+  document.getElementById('modal-book')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-book')) closeBookModal();
+  });
+
+  // Tombol update cepat progres
+  document.getElementById('btn-modal-quick-close')?.addEventListener('click', closeQuickProgressModal);
+  document.getElementById('modal-quick-progress')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-quick-progress')) closeQuickProgressModal();
+  });
+
+  // Database status button & modal
+  document.getElementById('btn-db-status')?.addEventListener('click', openDbStatusModal);
+  document.getElementById('btn-modal-db-close')?.addEventListener('click', closeDbStatusModal);
+  document.getElementById('btn-modal-db-done')?.addEventListener('click', closeDbStatusModal);
+  document.getElementById('modal-db-status')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-db-status')) closeDbStatusModal();
+  });
+
+  // Manual Ping button
+  document.getElementById('btn-ping-db-now')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-ping-db-now');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Mem-ping...';
+    await checkDbStatus();
+    btn.disabled = false;
+    btn.innerHTML = '⚡ Ping Database Sekarang';
+    showToast(lastPingResult && lastPingResult.success ? '⚡ Database berhasil di-ping!' : '⚠️ Gagal mem-ping database', lastPingResult?.success ? 'success' : 'error');
+  });
+
+  // Form submit: Buku baru/edit
+  document.getElementById('book-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('book-id').value;
+    const title = document.getElementById('book-title').value.trim();
+    const author = document.getElementById('book-author').value.trim();
+    const currentPage = parseInt(document.getElementById('book-current-page').value, 10) || 0;
+    const totalPages = parseInt(document.getElementById('book-total-pages').value, 10) || 0;
+    const status = document.getElementById('book-status').value;
+    const notes = document.getElementById('book-notes').value.trim();
+
+    if (!title) {
+      showToast('Judul buku wajib diisi!', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btn-save-book');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      if (id) {
+        await updateBook(id, { title, author, current_page: currentPage, total_pages: totalPages, status, notes });
+        showToast('📖 Buku berhasil diperbarui!', 'success');
+      } else {
+        await addBook({ title, author, current_page: currentPage, total_pages: totalPages, status, notes });
+        showToast('🎉 Buku baru ditambahkan ke rak!', 'success');
+      }
+      closeBookModal();
+      await loadBooks();
+    } catch (err) {
+      showToast('Gagal menyimpan buku: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Simpan Buku';
+    }
+  });
+
+  // Form submit: Quick Progress
+  document.getElementById('quick-progress-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const bookId = document.getElementById('quick-book-id').value;
+    const newPage = parseInt(document.getElementById('quick-current-page').value, 10) || 0;
+    const book = books.find(b => b.id === bookId);
+
+    const btn = document.getElementById('btn-save-quick-progress');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const isFinished = book && book.total_pages > 0 && newPage >= book.total_pages;
+      await updateBookProgress(bookId, newPage, isFinished ? 'finished' : (book?.status || 'reading'));
+      closeQuickProgressModal();
+      await loadBooks();
+      showToast(`✅ Progres diperbarui ke halaman ${newPage}!`, 'success');
+    } catch (err) {
+      showToast('Gagal update progres: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Simpan Progress';
+    }
+  });
+
+  // Filter tabs buku
+  document.querySelectorAll('.book-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.book-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeBookFilter = btn.dataset.filter;
+      renderBookshelf();
+    });
+  });
+}
+
 // ─── SERVICE WORKER ───────────────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -814,6 +1712,8 @@ async function init() {
   try {
     await loadCategories();
     await loadToday();
+    initReadingFeature();
+    checkDbStatus();
   } catch (e) {
     // Error handled inside each loader
   }

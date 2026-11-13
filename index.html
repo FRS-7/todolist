@@ -27,7 +27,13 @@
 <!-- ╚═══════════════════════════════════╝ -->
 <header class="app-header">
   <div class="header-inner">
-    <div class="app-title">⚡ Catatan Aktivitas</div>
+    <div class="header-top-row">
+      <div class="app-title">⚡ Catatan Aktivitas</div>
+      <button id="btn-db-status" class="db-status-pill checking" type="button" title="Status Database & Anti-Pause Bot">
+        <span class="db-dot"></span>
+        <span id="db-status-text">Cek DB...</span>
+      </button>
+    </div>
     <div class="clock-block">
       <div id="clock" class="clock-time">00:00:00</div>
       <div class="clock-date">
@@ -107,6 +113,133 @@
       <div class="empty-state">
         <span class="empty-icon">⏳</span>
         <div class="empty-text">Memuat aktivitas...</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ═══ PAGE: MEMBACA BUKU ═══ -->
+  <section id="page-reading" class="page">
+
+    <!-- Banner Motivasi & Streak Membaca -->
+    <div class="reading-banner card">
+      <div class="reading-streak-row">
+        <div class="streak-badge">
+          <span class="streak-flame">🔥</span>
+          <div>
+            <div class="streak-num" id="reading-streak-count">0 Hari</div>
+            <div class="streak-lbl">Streak Membaca</div>
+          </div>
+        </div>
+        <div class="today-read-status" id="today-read-status">
+          <span class="status-dot"></span>
+          <span id="today-read-text">Belum membaca hari ini</span>
+        </div>
+      </div>
+      <div class="reading-quote-box">
+        <div class="quote-text" id="reading-quote-text">"Buku adalah jembatan ilmu untuk menghubungkan masa lalu dengan masa depan."</div>
+        <div class="quote-author" id="reading-quote-author">— Pepatah Inspiratif</div>
+      </div>
+    </div>
+
+    <!-- Card Pengingat Membaca Harian -->
+    <p class="section-title">🔔 Pengingat Membaca Harian</p>
+    <div class="card reminder-card">
+      <div class="reminder-header">
+        <div>
+          <div class="reminder-title">Notifikasi Pengingat</div>
+          <div class="reminder-subtitle">Beri tahu saya agar tidak lupa membaca buku setiap hari</div>
+        </div>
+        <label class="switch" title="Aktifkan/Matikan Pengingat">
+          <input type="checkbox" id="reminder-toggle" />
+          <span class="slider round"></span>
+        </label>
+      </div>
+
+      <div class="reminder-settings" id="reminder-settings-row">
+        <div class="reminder-time-group">
+          <label class="form-label" for="reminder-time">Jam Pengingat Harian:</label>
+          <input type="time" id="reminder-time" class="form-input" value="20:00" />
+        </div>
+        <div class="reminder-actions-row">
+          <button type="button" id="btn-save-reminder" class="btn btn-secondary btn-sm">💾 Simpan Jam</button>
+          <button type="button" id="btn-test-notification" class="btn btn-secondary btn-sm">🔔 Tes Notifikasi</button>
+        </div>
+      </div>
+      <div class="reminder-status-info" id="reminder-status-info">
+        <span class="info-icon">💡</span>
+        <span id="reminder-status-text">Notifikasi pengingat membaca akan berbunyi dan tampil otomatis.</span>
+      </div>
+    </div>
+
+    <!-- Card Timer Sesi Membaca Terfokus -->
+    <p class="section-title">⏱️ Sesi Fokus Membaca</p>
+    <div class="card timer-card">
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label" for="timer-book-select">Pilih Buku yang Dibaca:</label>
+        <div class="select-wrapper">
+          <select id="timer-book-select" class="form-select">
+            <option value="">— Membaca Bebas (Tanpa Buku Khusus) —</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Preset Mode -->
+      <div class="timer-presets-row" id="timer-presets-row">
+        <button type="button" class="btn-preset active" data-minutes="15">15m</button>
+        <button type="button" class="btn-preset" data-minutes="25">25m (Pomodoro)</button>
+        <button type="button" class="btn-preset" data-minutes="30">30m</button>
+        <button type="button" class="btn-preset" data-minutes="45">45m</button>
+        <button type="button" class="btn-preset" data-minutes="60">60m</button>
+        <button type="button" class="btn-preset" data-minutes="0">Stopwatch</button>
+      </div>
+
+      <!-- Timer Display Box -->
+      <div class="timer-display-box">
+        <div class="timer-digits" id="timer-digits">15:00</div>
+        <div class="timer-status-label" id="timer-status-label">Siap Membaca</div>
+      </div>
+
+      <!-- Input Pelacak Halaman -->
+      <div class="timer-pages-row" id="timer-pages-row">
+        <div class="page-input-group">
+          <label class="form-label" for="timer-start-page">Hal. Awal</label>
+          <input type="number" id="timer-start-page" class="form-input" placeholder="0" min="0" />
+        </div>
+        <div class="page-input-arrow">➔</div>
+        <div class="page-input-group">
+          <label class="form-label" for="timer-end-page">Hal. Akhir</label>
+          <input type="number" id="timer-end-page" class="form-input" placeholder="0" min="0" />
+        </div>
+      </div>
+
+      <!-- Timer Controls -->
+      <div class="timer-controls">
+        <button type="button" id="btn-timer-start" class="btn btn-primary timer-btn-start">▶ Mulai Sesi Membaca</button>
+        <button type="button" id="btn-timer-pause" class="btn btn-secondary timer-btn-pause" style="display:none">⏸ Jeda</button>
+        <button type="button" id="btn-timer-finish" class="btn btn-finish timer-btn-finish" style="display:none">⏹ Selesai & Catat</button>
+        <button type="button" id="btn-timer-reset" class="btn btn-secondary timer-btn-reset" style="display:none">🔄 Reset</button>
+      </div>
+    </div>
+
+    <!-- Rak Buku / Bookshelf -->
+    <div class="bookshelf-header-row">
+      <p class="section-title" style="margin-bottom:0">📚 Rak Buku Saya</p>
+      <button type="button" id="btn-open-add-book" class="btn btn-primary btn-sm">+ Tambah Buku</button>
+    </div>
+
+    <!-- Books Filter Tabs -->
+    <div class="book-filter-tabs">
+      <button type="button" class="book-filter-btn active" data-filter="all">Semua (<span id="count-book-all">0</span>)</button>
+      <button type="button" class="book-filter-btn" data-filter="reading">Sedang Dibaca (<span id="count-book-reading">0</span>)</button>
+      <button type="button" class="book-filter-btn" data-filter="wishlist">Ingin Dibaca (<span id="count-book-wishlist">0</span>)</button>
+      <button type="button" class="book-filter-btn" data-filter="finished">Selesai (<span id="count-book-finished">0</span>)</button>
+    </div>
+
+    <div id="bookshelf-grid" class="bookshelf-grid">
+      <div class="empty-state">
+        <span class="empty-icon">⏳</span>
+        <div class="empty-text">Memuat rak buku...</div>
       </div>
     </div>
 
@@ -193,6 +326,10 @@
     <span class="nav-icon">✏️</span>
     <span>Catat</span>
   </button>
+  <button class="nav-item" data-tab="reading" id="nav-reading" aria-label="Membaca Buku">
+    <span class="nav-icon">📚</span>
+    <span>Membaca</span>
+  </button>
   <button class="nav-item" data-tab="recap" id="nav-recap" aria-label="Rekap Bulanan">
     <span class="nav-icon">📊</span>
     <span>Rekap</span>
@@ -236,6 +373,133 @@
         <button type="submit" id="btn-save-edit" class="btn btn-primary">Simpan</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ╔═══════════════════════════════════╗ -->
+<!--   MODAL: TAMBAH / EDIT BUKU          -->
+<!-- ╚═══════════════════════════════════╝ -->
+<div id="modal-book" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-book-title">
+  <div class="modal">
+    <h2 id="modal-book-title" class="modal-title">📚 Tambah Buku Baru</h2>
+    <form id="book-form" autocomplete="off">
+      <input type="hidden" id="book-id" />
+
+      <div class="form-group">
+        <label class="form-label" for="book-title">Judul Buku *</label>
+        <input type="text" id="book-title" class="form-input" placeholder="Contoh: Atomic Habits" required />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="book-author">Penulis</label>
+        <input type="text" id="book-author" class="form-input" placeholder="Contoh: James Clear" />
+      </div>
+
+      <div class="manual-time-inputs visible" style="margin-top:0;margin-bottom:14px">
+        <div class="form-group" style="flex:1;margin-bottom:0">
+          <label class="form-label" for="book-current-page">Hal. Saat Ini</label>
+          <input type="number" id="book-current-page" class="form-input" placeholder="0" min="0" value="0" />
+        </div>
+        <div class="form-group" style="flex:1;margin-bottom:0">
+          <label class="form-label" for="book-total-pages">Total Halaman</label>
+          <input type="number" id="book-total-pages" class="form-input" placeholder="320" min="0" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="book-status">Status Baca</label>
+        <div class="select-wrapper">
+          <select id="book-status" class="form-select">
+            <option value="reading">📖 Sedang Dibaca</option>
+            <option value="wishlist">🔖 Ingin Dibaca</option>
+            <option value="finished">✅ Selesai Dibaca</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="book-notes">Catatan / Kutipan Favorit</label>
+        <textarea id="book-notes" class="form-textarea" rows="2" placeholder="Tulis kutipan atau catatan penting dari buku ini..."></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="btn-modal-book-close" class="btn btn-secondary">Batal</button>
+        <button type="submit" id="btn-save-book" class="btn btn-primary">Simpan Buku</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ╔═══════════════════════════════════╗ -->
+<!--   MODAL: UPDATE PROGRES CEPAT BUKU   -->
+<!-- ╚═══════════════════════════════════╝ -->
+<div id="modal-quick-progress" class="modal-overlay" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2 class="modal-title">📖 Update Halaman Terakhir</h2>
+    <div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px" id="quick-book-title">—</div>
+    <form id="quick-progress-form">
+      <input type="hidden" id="quick-book-id" />
+      <div class="form-group">
+        <label class="form-label" for="quick-current-page">Halaman Terakhir Dibaca</label>
+        <input type="number" id="quick-current-page" class="form-input" min="0" required style="font-size:20px;font-family:var(--font-mono);font-weight:700" />
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px" id="quick-page-hint">Total: 0 halaman</div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="btn-modal-quick-close" class="btn btn-secondary">Batal</button>
+        <button type="submit" id="btn-save-quick-progress" class="btn btn-primary">Simpan Progress</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ╔═══════════════════════════════════╗ -->
+<!--   MODAL: STATUS DATABASE & BOT       -->
+<!-- ╚═══════════════════════════════════╝ -->
+<div id="modal-db-status" class="modal-overlay" role="dialog" aria-modal="true">
+  <div class="modal modal-wide">
+    <div class="modal-header-between">
+      <h2 class="modal-title" style="margin-bottom:0">⚡ Status Database & Anti-Pause</h2>
+      <button type="button" id="btn-modal-db-close" class="modal-close-icon">✕</button>
+    </div>
+
+    <!-- Status Strip -->
+    <div class="db-status-detail-card" id="db-detail-status-card">
+      <div class="db-indicator-large">
+        <span class="db-pulse-dot" id="db-modal-dot"></span>
+        <div>
+          <div class="db-modal-state" id="db-modal-state">Memeriksa Database...</div>
+          <div class="db-modal-latency" id="db-modal-latency">Latency: — ms</div>
+        </div>
+      </div>
+      <button type="button" id="btn-ping-db-now" class="btn btn-secondary btn-sm">
+        ⚡ Ping Database Sekarang
+      </button>
+    </div>
+
+    <!-- Info Box: Supabase Inactivity Rules -->
+    <div class="info-card-box">
+      <div class="info-card-title">🛡️ Sistem Anti-Pause Supabase</div>
+      <p class="info-card-desc">
+        Supabase Free Tier otomatis <strong>mem-pause database setelah 7 hari tidak ada aktivitas</strong>.
+        Untuk mencegah database tertidur atau mati:
+      </p>
+      <ul class="info-card-list">
+        <li>🤖 <strong>Bot GitHub Actions:</strong> Workflow otomatis mem-ping database setiap <strong>3 hari sekali</strong> secara berkala dari cloud GitHub (tanpa perlu membuka laptop).</li>
+        <li>🔄 <strong>In-App Ping:</strong> Setiap kali aplikasi dibuka atau tombol ping ditekan, koneksi langsung disegarkan.</li>
+        <li>💻 <strong>Bot Mandiri (Local/Server):</strong> Tersedia skrip <code>scripts/keep_alive.js</code> &amp; <code>keep_alive.py</code> yang siap dijalankan kapan saja.</li>
+      </ul>
+    </div>
+
+    <!-- Ping History -->
+    <div class="db-ping-log-wrap">
+      <div class="db-ping-log-title">Riwayat Ping Terakhir:</div>
+      <div class="db-ping-log-time" id="db-last-ping-time">Belum ada ping pada sesi ini</div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px">
+      <button type="button" id="btn-modal-db-done" class="btn btn-primary">Tutup</button>
+    </div>
   </div>
 </div>
 

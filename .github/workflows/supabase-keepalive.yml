@@ -1,0 +1,56 @@
+name: 🛡️ Supabase Database Keep-Alive Bot
+
+on:
+  # Berjalan otomatis setiap 3 hari sekali pada pukul 04:00 UTC (11:00 WIB)
+  # Jauh sebelum batas inaktivitas 7 hari Supabase
+  schedule:
+    - cron: '0 4 */3 * *'
+  # Memungkinkan pemicuan manual kapan saja dari tab GitHub Actions
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    name: Ping Supabase Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Keep-Alive Ping to Supabase
+        run: |
+          # Gunakan secret jika disetel di repository, atau fallback ke kredensial proyek
+          SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+          if [ -z "$SUPABASE_URL" ]; then
+            SUPABASE_URL="https://gcakfwokwtgidaddieif.supabase.co"
+          fi
+
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjYWtmd29rd3RnaWRhZGRpZWlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MjI2NDQsImV4cCI6MjA5OTQ5ODY0NH0.K6o2T1qQSVV5FtyuUGYzyqEUL-qvfq5gGof8IG3lr3A"
+          fi
+
+          echo "=========================================================="
+          echo "🚀 Mengirim Ping Keep-Alive ke Supabase: $SUPABASE_URL"
+          echo "📅 Waktu: $(date -u)"
+          echo "=========================================================="
+
+          # Ping REST API PostgREST Supabase
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET "$SUPABASE_URL/rest/v1/categories?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+
+          echo "HTTP Response Status Code: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 206 ]; then
+            echo "✅ SUKSES! Database aktif dan merespons dengan status $HTTP_STATUS."
+            echo "🛡️ Penghitung inaktivitas 7 hari Supabase berhasil direset."
+          else
+            echo "⚠️ PERINGATAN: Supabase merespons dengan status $HTTP_STATUS."
+            # Coba ping endpoint root / health
+            ROOT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SUPABASE_URL")
+            echo "Root URL Status: $ROOT_STATUS"
+            if [ "$HTTP_STATUS" -eq 503 ] || [ "$HTTP_STATUS" -eq 500 ]; then
+              echo "🚨 Database mungkin sedang dalam keadaan paused. Buka dashboard Supabase untuk unpause."
+              exit 1
+            fi
+          fi
+

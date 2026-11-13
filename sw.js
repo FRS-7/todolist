@@ -1,5 +1,5 @@
 // Service Worker — Catatan Aktivitas Harian
-const CACHE_NAME = 'aktivitas-v1';
+const CACHE_NAME = 'aktivitas-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -43,5 +43,22 @@ self.addEventListener('fetch', event => {
         return response;
       })
       .catch(() => caches.match(event.request))
+  );
+});
+
+// Notifikasi klik
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow('./');
+      }
+    })
   );
 });
